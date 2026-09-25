@@ -1,0 +1,51 @@
+// AgriLink Prisma Schema for PostgreSQL / Supabase
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MarketPrice {
+  id              String   @id @default(uuid())
+  date            String
+  state           String
+  district        String
+  market          String
+  commodity       String
+  minPrice        Float
+  maxPrice        Float
+  modalPrice      Float
+  arrivalQuantity Float?   @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([commodity, market, date])
+  @@index([state, commodity])
+}
+
+model Crop {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  category  String
+  createdAt DateTime @default(now())
+}
+
+model Market {
+  id        String   @id @default(uuid())
+  name      String
+  state     String
+  district  String
+  createdAt DateTime @default(now())
+
+  @@unique([name, state, district])
+}
+
+model Alert {
+  id          String   @id @default(uuid())
+  crop        String
+  market      String
+  targetPrice Float
+  createdAt   DateTime @default(now())
+}
