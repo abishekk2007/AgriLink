@@ -1,0 +1,173 @@
+// AgriLink Prisma Database Schema
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String       @id @default(uuid())
+  name              String
+  email             String       @unique
+  phone             String?
+  role              String       @default("FARMER")
+  preferredLanguage String       @default("en")
+  alerts            PriceAlert[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@map("users")
+}
+
+model Commodity {
+  id           String        @id @default(uuid())
+  name         String
+  code         String        @unique
+  category     String        @default("VEGETABLES") // VEGETABLES, GRAINS, PULSES, OILSEEDS, FRUITS
+  defaultUnit  String        @default("₹/kg")
+  icon         String?
+  isMspCovered Boolean       @default(false)
+  marketPrices MarketPrice[]
+  alerts       PriceAlert[]
+  msps         MSP[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("commodities")
+}
+
+model State {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  code      String     @unique
+  districts District[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("states")
+}
+
+model District {
+  id        String   @id @default(uuid())
+  name      String
+  stateId   String
+  state     State    @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  markets   Market[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([stateId, name])
+  @@map("districts")
+}
+
+model Market {
+  id           String        @id @default(uuid())
+  name         String
+  code         String        @unique
+  districtId   String
+  district     District      @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  address      String?
+  latitude     Float?
+  longitude    Float?
+  marketPrices MarketPrice[]
+  alerts       PriceAlert[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("markets")
+}
+
+model DataSource {
+  id           String           @id @default(uuid())
+  name         String
+  provider     String
+  url          String?
+  lastUpdated  DateTime         @default(now())
+  marketPrices MarketPrice[]
+  importLogs   PriceImportLog[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@map("data_sources")
+}
+
+model MarketPrice {
+  id          String     @id @default(uuid())
+  commodityId String
+  commodity   Commodity  @relation(fields: [commodityId], references: [id], onDelete: Cascade)
+  marketId    String
+  market      Market     @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  date        DateTime   @db.Date
+  minPrice    Float
+  maxPrice    Float
+  modalPrice  Float
+  unit        String     @default("₹/kg")
+  sourceId    String
+  source      DataSource @relation(fields: [sourceId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Performance indexes for fast querying of historical and range trends
+  @@unique([commodityId, marketId, date])
+  @@index([commodityId])
+  @@index([marketId])
+  @@index([date])
+  @@index([commodityId, marketId, date])
+  @@map("market_prices")
+}
+
+model PriceAlert {
+  id          String    @id @default(uuid())
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  commodityId String
+  commodity   Commodity @relation(fields: [commodityId], references: [id], onDelete: Cascade)
+  marketId    String
+  market      Market    @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  targetPrice Float
+  condition   String    @default("ABOVE") // "ABOVE" | "BELOW"
+  status      String    @default("ACTIVE") // "ACTIVE" | "TRIGGERED" | "DISABLED"
+  triggeredAt DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([commodityId, marketId])
+  @@map("price_alerts")
+}
+
+model MSP {
+  id          String    @id @default(uuid())
+  commodityId String
+  commodity   Commodity @relation(fields: [commodityId], references: [id], onDelete: Cascade)
+  season      String    // "Kharif" | "Rabi" | "Annual"
+  year        Int       // e.g. 2025, 2026
+  price       Float     // in ₹/quintal
+  unit        String    @default("₹/quintal")
+  source      String    @default("Commission for Agricultural Costs and Prices (CACP), GoI")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([commodityId, season, year])
+  @@index([commodityId, year])
+  @@map("msp_records")
+}
+
+model PriceImportLog {
+  id              String     @id @default(uuid())
+  sourceId        String
+  source          DataSource @relation(fields: [sourceId], references: [id])
+  filename        String
+  recordsImported Int
+  status          String     @default("SUCCESS") // "SUCCESS" | "FAILED" | "PARTIAL"
+  errors          String?
+  createdAt       DateTime   @default(now())
+
+  @@map("price_import_logs")
+}
